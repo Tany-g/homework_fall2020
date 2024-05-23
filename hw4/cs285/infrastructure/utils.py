@@ -2,6 +2,20 @@ import numpy as np
 import time
 import copy
 
+from typing_extensions import TypedDict
+from typing import Tuple, List
+
+from cs285.policies.base_policy import BasePolicy
+
+
+class PathDict(TypedDict):
+    observation: np.ndarray
+    image_obs: np.ndarray
+    reward: np.ndarray
+    action: np.ndarray
+    next_observation: np.ndarray
+    terminal: np.ndarray
+
 ############################################
 ############################################
 
@@ -54,30 +68,92 @@ def mean_squared_error(a, b):
 ############################################
 ############################################
 
-def sample_trajectory(env, policy, max_path_length, render=False, render_mode=('rgb_array')):
-# TODO: get this from Piazza
 
-def sample_trajectories(env, policy, min_timesteps_per_batch, max_path_length, render=False, render_mode=('rgb_array')):
+def sample_trajectory(
+    env,
+    policy: BasePolicy,
+    max_path_length: int,
+    render: bool=False,
+    render_mode=('rgb_array'),
+) -> PathDict:
+
+    ob = env.reset()
+    obs, acs, rewards, next_obs, terminals, image_obs = [], [], [], [], [], []
+    steps = 0
+    while True:
+        if render:
+            if 'rgb_array' in render_mode:
+                if hasattr(env, 'sim'):
+                    if 'track' in env.env.model.camera_names:
+                        image_obs.append(env.sim.render(camera_name='track', height=500, width=500)[::-1])
+                    else:
+                        image_obs.append(env.sim.render(height=500, width=500)[::-1])
+                else:
+                    image_obs.append(env.render(mode=render_mode))
+            if 'human' in render_mode:
+                env.render(mode=render_mode)
+                time.sleep(env.model.opt.timestep)
+        obs.append(ob)
+        ac = policy.get_action(ob)
+        ac = ac[0]
+        acs.append(ac)
+        ob, rew, done, _ = env.step(ac)
+        # add the observation after taking a step to next_obs
+        next_obs.append(ob)
+        rewards.append(rew)
+        steps += 1
+        # If the episode ended, the corresponding terminal value is 1
+        # otherwise, it is 0
+        if done or steps > max_path_length:
+            terminals.append(1)
+            break
+        else:
+            terminals.append(0)
+
+    return Path(obs, image_obs, acs, rewards, next_obs, terminals)
+
+def sample_trajectories(
+    env,
+    policy: BasePolicy,
+    min_timesteps_per_batch: int,
+    max_path_length: int,
+    render=False,
+    render_mode=('rgb_array'),
+) -> Tuple[List[PathDict], int]:
     """
-        Collect rollouts using policy
-        until we have collected min_timesteps_per_batch steps
+        Collect rollouts until we have collected min_timesteps_per_batch steps.
     """
-    # TODO: get this from Piazza
+    timesteps_this_batch = 0
+    paths: List[PathDict] = []
+    while timesteps_this_batch < min_timesteps_per_batch:
+        path: PathDict = sample_trajectory(env, policy, max_path_length, render, render_mode)
+        paths.append(path)
+        timesteps_this_batch += path['observation'].shape[0]
 
     return paths, timesteps_this_batch
 
-def sample_n_trajectories(env, policy, ntraj, max_path_length, render=False, render_mode=('rgb_array')):
+def sample_n_trajectories(env, policy: BasePolicy, ntraj: int, max_path_length: int, render=False, render_mode=('rgb_array')) -> List[PathDict]:
     """
-        Collect ntraj rollouts using policy
+        Collect ntraj rollouts.
     """
-    # TODO: get this from Piazza
+    paths: List[PathDict] = []
+
+    for _ in range(ntraj):
+        paths.append(sample_trajectory(env, policy, max_path_length, render, render_mode))
 
     return paths
 
 ############################################
 ############################################
 
-def Path(obs, image_obs, acs, rewards, next_obs, terminals):
+def Path(
+    obs: List[np.ndarray],
+    image_obs: List[np.ndarray],
+    acs: List[np.ndarray],
+    rewards: List[np.ndarray],
+    next_obs: List[np.ndarray], 
+    terminals: List[bool],
+) -> PathDict:
     """
         Take info (separate arrays) from a single rollout
         and return it in a single dictionary

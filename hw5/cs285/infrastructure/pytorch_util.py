@@ -18,14 +18,14 @@ _str_to_activation = {
 
 
 def build_mlp(
-        input_size: int,
-        output_size: int,
-        n_layers: int,
-        size: int,
-        activation: Activation = 'tanh',
-        output_activation: Activation = 'identity',
-        init_method=None,
-):
+    input_size: int,
+    output_size: int,
+    n_layers: int,
+    size: int,
+    activation: Activation = 'tanh',
+    output_activation: Activation = 'identity',
+    init_method=None,
+) -> nn.Sequential:
     """
         Builds a feedforward neural network
         arguments:

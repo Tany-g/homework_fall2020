@@ -71,7 +71,6 @@ class ReplayBuffer(object):
         return self.obs[rand_indices], self.acs[rand_indices], self.concatenated_rews[rand_indices], self.next_obs[rand_indices], self.terminals[rand_indices]
 
     def sample_recent_data(self, batch_size=1, concat_rew=True):
-
         if concat_rew:
             return self.obs[-batch_size:], self.acs[-batch_size:], self.concatenated_rews[-batch_size:], self.next_obs[-batch_size:], self.terminals[-batch_size:]
         else:

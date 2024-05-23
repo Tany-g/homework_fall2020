@@ -1,16 +1,40 @@
 import numpy as np
 import time
 
+from typing_extensions import TypedDict
+from typing import Tuple, List
+
+from cs285.policies.base_policy import BasePolicy
+
+class PathDict(TypedDict):
+    observation: np.ndarray
+    image_obs: np.ndarray
+    reward: np.ndarray
+    action: np.ndarray
+    next_observation: np.ndarray
+    terminal: np.ndarray
+
 ############################################
 ############################################
 
-def sample_trajectory(env, policy, max_path_length, render=False, render_mode=('rgb_array')):
+def sample_trajectory(
+    env,
+    policy: BasePolicy,
+    max_path_length: int,
+    render: bool=False,
+    render_mode=('rgb_array'),
+) -> PathDict:
 
     # initialize env for the beginning of a new rollout
-    ob = TODO # HINT: should be the output of resetting the env
+    ob: np.ndarray = env.reset()
 
     # init vars
-    obs, acs, rewards, next_obs, terminals, image_obs = [], [], [], [], [], []
+    obs: List[np.ndarray] = []
+    acs: List[np.ndarray] = []
+    rewards: List[np.ndarray] = []
+    next_obs: List[np.ndarray] = []
+    terminals: List[bool] = []
+    image_obs: List[np.ndarray] = []
     steps = 0
     while True:
 
@@ -27,7 +51,7 @@ def sample_trajectory(env, policy, max_path_length, render=False, render_mode=('
 
         # use the most recent ob to decide what to do
         obs.append(ob)
-        ac = TODO # HINT: query the policy's get_action function
+        ac = policy.get_action(ob)
         ac = ac[0]
         acs.append(ac)
 
@@ -39,9 +63,9 @@ def sample_trajectory(env, policy, max_path_length, render=False, render_mode=('
         next_obs.append(ob)
         rewards.append(rew)
 
-        # TODO end the rollout if the rollout ended
+        # end the rollout if the rollout ended
         # HINT: rollout can end due to done, or due to max_path_length
-        rollout_done = TODO # HINT: this is either 0 or 1
+        rollout_done = bool(done) or steps >= max_path_length
         terminals.append(rollout_done)
 
         if rollout_done:
@@ -49,39 +73,48 @@ def sample_trajectory(env, policy, max_path_length, render=False, render_mode=('
 
     return Path(obs, image_obs, acs, rewards, next_obs, terminals)
 
-def sample_trajectories(env, policy, min_timesteps_per_batch, max_path_length, render=False, render_mode=('rgb_array')):
+def sample_trajectories(
+    env,
+    policy: BasePolicy,
+    min_timesteps_per_batch: int,
+    max_path_length: int,
+    render=False,
+    render_mode=('rgb_array'),
+) -> Tuple[List[PathDict], int]:
     """
         Collect rollouts until we have collected min_timesteps_per_batch steps.
-
-        TODO implement this function
-        Hint1: use sample_trajectory to get each path (i.e. rollout) that goes into paths
-        Hint2: use get_pathlength to count the timesteps collected in each path
     """
     timesteps_this_batch = 0
-    paths = []
+    paths: List[PathDict] = []
     while timesteps_this_batch < min_timesteps_per_batch:
-
-        TODO
+        path: PathDict = sample_trajectory(env, policy, max_path_length, render, render_mode)
+        paths.append(path)
+        timesteps_this_batch += path['observation'].shape[0]
 
     return paths, timesteps_this_batch
 
-def sample_n_trajectories(env, policy, ntraj, max_path_length, render=False, render_mode=('rgb_array')):
+def sample_n_trajectories(env, policy: BasePolicy, ntraj: int, max_path_length: int, render=False, render_mode=('rgb_array')) -> List[PathDict]:
     """
         Collect ntraj rollouts.
-
-        TODO implement this function
-        Hint1: use sample_trajectory to get each path (i.e. rollout) that goes into paths
     """
-    paths = []
+    paths: List[PathDict] = []
 
-    TODO
+    for _ in range(ntraj):
+        paths.append(sample_trajectory(env, policy, max_path_length, render, render_mode))
 
     return paths
 
 ############################################
 ############################################
 
-def Path(obs, image_obs, acs, rewards, next_obs, terminals):
+def Path(
+    obs: List[np.ndarray],
+    image_obs: List[np.ndarray],
+    acs: List[np.ndarray],
+    rewards: List[np.ndarray],
+    next_obs: List[np.ndarray], 
+    terminals: List[bool],
+) -> PathDict:
     """
         Take info (separate arrays) from a single rollout
         and return it in a single dictionary

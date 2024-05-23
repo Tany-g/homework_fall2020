@@ -11,14 +11,15 @@ class ArgMaxPolicy(object):
         self.critic = critic
 
     def get_action(self, obs):
-        # MJ: changed the dimension check to a 3
-        if len(obs.shape) > 3:
-            observation = obs
-        else:
-            observation = obs[None]
+        if len(obs.shape) <= 3:
+            obs = obs[None]
 
-        raise NotImplementedError
-        # TODO: get this from hw3
+        # return the action that maxinmizes the Q-value
+        # at the current observation as the output
+        q = self.critic.qa_values(obs)
+        acs = q.argmax(1)
+
+        return acs.squeeze()
 
     ####################################
     ####################################

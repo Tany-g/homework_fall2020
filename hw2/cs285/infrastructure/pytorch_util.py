@@ -1,6 +1,7 @@
 from typing import Union
 
 import torch
+import numpy as np
 from torch import nn
 
 Activation = Union[str, nn.Module]
@@ -79,5 +80,5 @@ def from_numpy(*args, **kwargs):
     return torch.from_numpy(*args, **kwargs).float().to(device)
 
 
-def to_numpy(tensor):
+def to_numpy(tensor: torch.Tensor) -> np.ndarray:
     return tensor.to('cpu').detach().numpy()

@@ -239,7 +239,7 @@ class PiecewiseSchedule(object):
         self._outside_value = outside_value
         self._endpoints      = endpoints
 
-    def value(self, t):
+    def value(self, t) -> float:
         """See Schedule.value"""
         for (l_t, l), (r_t, r) in zip(self._endpoints[:-1], self._endpoints[1:]):
             if l_t <= t and t < r_t:
@@ -427,7 +427,7 @@ class MemoryOptimizedReplayBuffer(object):
         idxes = sample_n_unique(lambda: random.randint(0, self.num_in_buffer - 2), batch_size)
         return self._encode_sample(idxes)
 
-    def encode_recent_observation(self):
+    def encode_recent_observation(self) -> np.ndarray:
         """Return the most recent `frame_history_len` frames.
 
         Returns

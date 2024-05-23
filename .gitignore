@@ -1,2 +1,5 @@
 *.pyc
 data/
+hw1/mypy.ini
+*.pdf
+hw2/run_logs/*

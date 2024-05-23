@@ -1,5 +1,6 @@
 import os
 import time
+from torch import multiprocessing
 
 from cs285.infrastructure.rl_trainer import RL_Trainer
 from cs285.agents.pg_agent import PGAgent
@@ -112,4 +113,6 @@ def main():
 
 
 if __name__ == "__main__":
+    multiprocessing.set_start_method('fork')
+
     main()

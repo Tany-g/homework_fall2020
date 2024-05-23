@@ -1,3 +1,4 @@
+from cs285.models.ff_model import FFModel
 import numpy as np
 
 from .base_policy import BasePolicy
@@ -30,10 +31,12 @@ class MPCPolicy(BasePolicy):
         self.low = self.ac_space.low
         self.high = self.ac_space.high
 
-    def sample_action_sequences(self, num_sequences, horizon):
-        # TODO(Q1) uniformly sample trajectories and return an array of
+    def sample_action_sequences(self, num_sequences: int, horizon: int):
+        # uniformly sample trajectories and return an array of
         # dimensions (num_sequences, horizon, self.ac_dim) in the range
         # [self.low, self.high]
+        random_action_sequences = self.low + np.random.random(
+            (num_sequences, horizon, self.ac_dim)) * (self.high - self.low)
         return random_action_sequences
 
     def get_action(self, obs):
@@ -58,11 +61,17 @@ class MPCPolicy(BasePolicy):
             predicted_sum_of_rewards_per_model, axis=0)  # [ens, N] --> N
 
         # pick the action sequence and return the 1st element of that sequence
-        best_action_sequence = None  # TODO (Q2)
-        action_to_take = None  # TODO (Q2)
+        best_action_sequence = \
+            candidate_action_sequences[predicted_rewards.argmax()]
+        action_to_take = best_action_sequence[0]
         return action_to_take[None]  # Unsqueeze the first index
 
-    def calculate_sum_of_rewards(self, obs, candidate_action_sequences, model):
+    def calculate_sum_of_rewards(
+        self,
+        obs: np.ndarray,
+        candidate_action_sequences: np.ndarray,
+        model: FFModel,
+    ):
         """
 
         :param obs: numpy array with the current observation. Shape [D_obs]
@@ -75,7 +84,6 @@ class MPCPolicy(BasePolicy):
         :return: numpy array with the sum of rewards for each action sequence.
         The array should have shape [N].
         """
-        sum_of_rewards = None  # TODO (Q2)
         # For each candidate action sequence, predict a sequence of
         # states for each dynamics model in your ensemble.
         # Once you have a sequence of predicted states from each model in
@@ -87,4 +95,22 @@ class MPCPolicy(BasePolicy):
         # Hint: Remember that the model can process observations and actions
         #       in batch, which can be much faster than looping through each
         #       action sequence.
+
+        N, H, _ = candidate_action_sequences.shape
+
+        pred_obs = np.zeros((N, H, self.ob_dim))
+        pred_obs[:, 0] = np.tile(obs[None, :], (N, 1))
+        rewards = np.zeros((N, H))
+        for t in range(H):
+            rewards[:, t], _ = self.env.get_reward(
+                pred_obs[:, t], candidate_action_sequences[:, t])
+            if t < H - 1:
+                pred_obs[:, t + 1] = model.get_prediction(
+                    pred_obs[:, t],
+                    candidate_action_sequences[:, t],
+                    self.data_statistics,
+                )
+
+        sum_of_rewards = rewards.sum(axis=1)
+        assert sum_of_rewards.shape == (N,)
         return sum_of_rewards

@@ -1,5 +1,6 @@
 import abc
 import itertools
+from typing import Any, cast
 from torch import nn
 from torch.nn import functional as F
 from torch import optim
@@ -13,6 +14,7 @@ from cs285.policies.base_policy import BasePolicy
 
 
 class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
+    optimizer: optim.Optimizer
 
     def __init__(self,
                  ac_dim,
@@ -38,10 +40,12 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         self.nn_baseline = nn_baseline
 
         if self.discrete:
-            self.logits_na = ptu.build_mlp(input_size=self.ob_dim,
-                                           output_size=self.ac_dim,
-                                           n_layers=self.n_layers,
-                                           size=self.size)
+            self.logits_na = ptu.build_mlp(
+                input_size=self.ob_dim,
+                output_size=self.ac_dim,
+                n_layers=self.n_layers,
+                size=self.size,
+            )
             self.logits_na.to(ptu.device)
             self.mean_net = None
             self.logstd = None
@@ -86,8 +90,17 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
 
     # query the policy with observation(s) to get selected action(s)
     def get_action(self, obs: np.ndarray) -> np.ndarray:
-        raise NotImplementedError
-        # TODO: get this from hw1
+        if len(obs.shape) > 1:
+            observation = obs
+        else:
+            observation = obs[None]
+
+        observation_tensor = torch.tensor(observation, dtype=torch.float).to(ptu.device)
+        action_distribution = self.forward(observation_tensor)
+        return cast(
+            np.ndarray,
+            action_distribution.sample().cpu().detach().numpy(),
+        )
 
     ####################################
     ####################################
@@ -101,9 +114,14 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
     # through it. For example, you can return a torch.FloatTensor. You can also
     # return more flexible objects, such as a
     # `torch.distributions.Distribution` object. It's up to you!
-    def forward(self, observation: torch.FloatTensor):
-        raise NotImplementedError
-        # TODO: get this from hw1
+    def forward(self, observation: torch.Tensor) -> distributions.Distribution:
+        if self.discrete:
+            return distributions.Categorical(logits=self.logits_na(observation))
+        else:
+            return distributions.Normal(
+                self.mean_net(observation),
+                torch.exp(self.logstd)[None],
+            )
 
     ####################################
     ####################################

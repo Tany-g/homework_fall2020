@@ -3,7 +3,7 @@ import time
 
 from cs285.infrastructure.rl_trainer import RL_Trainer
 from cs285.agents.explore_or_exploit_agent import ExplorationOrExploitationAgent
-from cs285.infrastructure.dqn_utils import get_env_kwargs, PiecewiseSchedule, ConstantSchedule
+from cs285.infrastructure.dqn_utils import get_env_kwargs, PiecewiseSchedule, ConstantSchedule, set_lander_q_network_layers
 
 
 class Q_Trainer(object):
@@ -55,6 +55,13 @@ def main():
     parser.add_argument('--num_exploration_steps', type=int, default=10000)
     parser.add_argument('--unsupervised_exploration', action='store_true')
 
+    parser.add_argument('--num_timesteps', type=int, default=50000)
+
+    parser.add_argument('--use_cbe', action='store_true',
+                        help='use count-based exploration')
+    parser.add_argument('--cbe_coefficient', type=float, default=1.0,
+                        help='count-based exploration coefficient')
+
     parser.add_argument('--offline_exploitation', action='store_true')
     parser.add_argument('--cql_alpha', type=float, default=0.0)
 
@@ -64,6 +71,7 @@ def main():
     parser.add_argument('--rnd_output_size', type=int, default=5)
     parser.add_argument('--rnd_n_layers', type=int, default=2)
     parser.add_argument('--rnd_size', type=int, default=400)
+    parser.add_argument('--dqn_n_layers', type=int, default=2)
 
     parser.add_argument('--seed', type=int, default=2)
     parser.add_argument('--no_gpu', '-ngpu', action='store_true')
@@ -80,7 +88,6 @@ def main():
     params['num_critic_updates_per_agent_update'] = 1
     params['exploit_weight_schedule'] = ConstantSchedule(1.0)
     params['video_log_freq'] = -1 # This param is not used for DQN
-    params['num_timesteps'] = 50000
     params['learning_starts'] = 2000
     params['eps'] = 0.2
     ##################################
@@ -96,7 +103,7 @@ def main():
     if params['env_name']=='PointmassVeryHard-v0':
         params['ep_len']=200
     
-    if params['use_rnd']:
+    if params['use_rnd'] or params['use_cbe']:
         params['explore_weight_schedule'] = PiecewiseSchedule([(0,1), (params['num_exploration_steps'], 0)], outside_value=0.0)
     else:
         params['explore_weight_schedule'] = ConstantSchedule(0.0)
@@ -105,9 +112,10 @@ def main():
         params['explore_weight_schedule'] = ConstantSchedule(1.0)
         params['exploit_weight_schedule'] = ConstantSchedule(0.0)
         
-        if not params['use_rnd']:
+        if not (params['use_rnd'] or params['use_cbe']):
             params['learning_starts'] = params['num_exploration_steps']
     
+    set_lander_q_network_layers(params['dqn_n_layers'])
 
     logdir_prefix = 'hw5_expl_'  # keep for autograder
     data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../data')
