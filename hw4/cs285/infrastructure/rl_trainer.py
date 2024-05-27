@@ -6,8 +6,8 @@ import time
 
 import gym
 from gym import wrappers
-import isaacgym
-from xarm_cube_stack import xarmCubeStack
+# import isaacgym
+# from xarm_cube_stack import xarmCubeStack
 import numpy as np
 import torch
 import pickle
@@ -60,7 +60,7 @@ class RL_Trainer(object):
 
         # Make the gym environment
         self.env = gym.make(self.params['env_name'])
-        self.env2 = 
+        # self.env2 = 
         
         if 'env_wrappers' in self.params:
             # These operations are currently only for Atari envs
