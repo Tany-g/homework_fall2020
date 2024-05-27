@@ -7,6 +7,8 @@ import time
 import gym
 from gym import wrappers
 import isaacgym
+from isaacgym import gymapi
+from isaacgym import gymutil
 from xarm_cube_stack import xarmCubeStack
 import numpy as np
 import torch
@@ -30,7 +32,66 @@ register_envs()
 MAX_NVIDEO = 2
 MAX_VIDEO_LEN = 40 # we overwrite this in the code below
 
+import yaml
+import isaacgym
+from isaacgymenvs.utils.utils import set_seed
 
+# 假设你的环境类在这个模块中
+from xarm_cube_stack import xarmCubeStack
+import torch
+# 加载环境配置
+# config_path ='/home/tany/PROJECT/IsaacGymEnvs/isaacgymenvs/cfg/task/xarmCubeStacktest.yaml'
+config_path = '/home/tany/PROJECT/homework_fall2020/hw4/xarmCubeStacktest.yaml'
+with open(config_path, 'r') as file:
+    cfg = yaml.safe_load(file)
+def preprocess_train_config(cfg, config_dict):
+    """
+    Adding common configuration parameters to the rl_games train config.
+    An alternative to this is inferring them in task-specific .yaml files, but that requires repeating the same
+    variable interpolations in each config.
+    """
+
+    train_cfg = config_dict['params']['config']
+
+    train_cfg['device'] = cfg.rl_device
+
+    train_cfg['population_based_training'] = cfg.pbt.enabled
+    train_cfg['pbt_idx'] = cfg.pbt.policy_idx if cfg.pbt.enabled else None
+
+    train_cfg['full_experiment_name'] = cfg.get('full_experiment_name')
+
+    print(f'Using rl_device: {cfg.rl_device}')
+    print(f'Using sim_device: {cfg.sim_device}')
+    print(train_cfg)
+
+    try:
+        model_size_multiplier = config_dict['params']['network']['mlp']['model_size_multiplier']
+        if model_size_multiplier != 1:
+            units = config_dict['params']['network']['mlp']['units']
+            for i, u in enumerate(units):
+                units[i] = u * model_size_multiplier
+            print(f'Modified MLP units by x{model_size_multiplier} to {config_dict["params"]["network"]["mlp"]["units"]}')
+    except KeyError:
+        pass
+
+    return config_dict
+
+
+# 环境初始化参数
+rl_device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+sim_device = "cuda:0" if torch.cuda.is_available() else "cpu"
+rl_device="cuda:0"
+sim_device="cuda:0"
+graphics_device_id = 0
+headless = False
+
+# 设置种子，可以选择任何整数值
+seed = 1234
+set_seed(seed)
+
+
+                    
 class RL_Trainer(object):
 
     def __init__(self, params):
@@ -57,10 +118,24 @@ class RL_Trainer(object):
         #############
         ## ENV
         #############
+        
+        # def create_sim(self):
+        # self.sim_params.up_axis = gymapi.UP_AXIS_Z
+        # self.sim_params.gravity.x = 0
+        # self.sim_params.gravity.y = 0
+        # self.sim_params.gravity.z = -9.81
+        # self.sim = super().create_sim(
+        #     self.device_id, self.graphics_device_id, self.physics_engine, self.sim_params)
+        # self._create_ground_plane()
+        # self._create_envs(self.num_envs, self.cfg["env"]['envSpacing'], int(np.sqrt(self.num_envs)))
 
+
+
+        # 创建环境实例
+        self.env = xarmCubeStack(cfg, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture=False,
+                            force_render=False)
         # Make the gym environment
-        self.env = gym.make(self.params['env_name'])
-        self.env2 = 
+        # self.env = gym.make(self.params['env_name'])
         
         if 'env_wrappers' in self.params:
             # These operations are currently only for Atari envs
@@ -73,7 +148,7 @@ class RL_Trainer(object):
             self.mean_episode_reward = -float('nan')
             self.best_mean_episode_reward = -float('inf')
 
-        self.env.seed(seed)
+        # self.env.seed(seed)
 
         # import plotting (locally if 'obstacles' env)
         if not(self.params['env_name']=='obstacles-cs285-v0'):
@@ -100,15 +175,15 @@ class RL_Trainer(object):
         self.params['agent_params']['ob_dim'] = ob_dim
 
         # simulation timestep, will be used for video saving
-        if 'model' in dir(self.env):
-            self.fps = 1/self.env.model.opt.timestep
-        elif 'env_wrappers' in self.params:
-            self.fps = 30 # This is not actually used when using the Monitor wrapper
-        elif 'video.frames_per_second' in self.env.env.metadata.keys():
-            self.fps = self.env.env.metadata['video.frames_per_second']
-        else:
-            self.fps = 10
-
+        # if 'model' in dir(self.env):
+        #     self.fps = 1/self.env.model.opt.timestep
+        # elif 'env_wrappers' in self.params:
+        #     self.fps = 30 # This is not actually used when using the Monitor wrapper
+        # elif 'video.frames_per_second' in self.env.env.metadata.keys():
+        #     self.fps = self.env.env.metadata['video.frames_per_second']
+        # else:
+        #     self.fps = 10
+        self.fps = 10
 
         #############
         ## AGENT

@@ -1,13 +1,13 @@
 import numpy as np
 import time
 import copy
-
+import torch
 from typing_extensions import TypedDict
 from typing import Tuple, List
-
+import isaacgym
 from cs285.policies.base_policy import BasePolicy
-
-
+from isaacgym import gymapi
+gym = gymapi.acquire_gym()
 class PathDict(TypedDict):
     observation: np.ndarray
     image_obs: np.ndarray
@@ -41,20 +41,26 @@ def calculate_mean_prediction_error(env, action_sequence, models, data_statistic
     return mpe, true_states, pred_states
 
 def perform_actions(env, actions):
-    ob = env.reset()
+    ob = env.reset()["obs"][0].to("cpu").numpy()
     obs, acs, rewards, next_obs, terminals, image_obs = [], [], [], [], [], []
     steps = 0
     for ac in actions:
         obs.append(ob)
         acs.append(ac)
+        ac = torch.tensor(ac,dtype=torch.float)
+        ac = torch.stack((ac,ac),0)
         ob, rew, done, _ = env.step(ac)
+
+        gym.step_graphics(env.sim)
+        gym.draw_viewer(env.viewer, env.sim, True)
         # add the observation after taking a step to next_obs
+        ob = ob["obs"][0].to("cpu").detach().numpy()
         next_obs.append(ob)
-        rewards.append(rew)
+        rewards.append(rew[0].to("cpu").detach().numpy())
         steps += 1
         # If the episode ended, the corresponding terminal value is 1
         # otherwise, it is 0
-        if done:
+        if done[0]:
             terminals.append(1)
             break
         else:
@@ -76,8 +82,7 @@ def sample_trajectory(
     render: bool=False,
     render_mode=('rgb_array'),
 ) -> PathDict:
-
-    ob = env.reset()
+    ob = env.reset()["obs"][0].to("cpu").numpy()
     obs, acs, rewards, next_obs, terminals, image_obs = [], [], [], [], [], []
     steps = 0
     while True:
@@ -94,17 +99,27 @@ def sample_trajectory(
                 env.render(mode=render_mode)
                 time.sleep(env.model.opt.timestep)
         obs.append(ob)
+        # 
+
+        
         ac = policy.get_action(ob)
         ac = ac[0]
         acs.append(ac)
+        
+        ac1 = torch.tensor(ac, dtype=torch.float)
+        ac  = torch.stack((ac1,ac1),0)
+        # gym.step_graphics(env.sim)
+        # gym.draw_viewer(env.viewer, env.sim, True)
         ob, rew, done, _ = env.step(ac)
+        ob = ob["obs"][0].to("cpu").detach().numpy()
+        print(ob,rew,done)
         # add the observation after taking a step to next_obs
         next_obs.append(ob)
-        rewards.append(rew)
+        rewards.append(rew[0].to("cpu").detach().numpy())
         steps += 1
         # If the episode ended, the corresponding terminal value is 1
         # otherwise, it is 0
-        if done or steps > max_path_length:
+        if done[0] or steps > max_path_length:
             terminals.append(1)
             break
         else:

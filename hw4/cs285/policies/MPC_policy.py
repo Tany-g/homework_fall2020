@@ -3,7 +3,7 @@ import numpy as np
 
 from .base_policy import BasePolicy
 
-
+import torch
 class MPCPolicy(BasePolicy):
 
     def __init__(self,
@@ -97,11 +97,16 @@ class MPCPolicy(BasePolicy):
         #       action sequence.
 
         N, H, _ = candidate_action_sequences.shape
-
+        candidate_action_sequences = torch.tensor(candidate_action_sequences,dtype=torch.float)
+        obs = torch.tensor(obs,dtype=torch.float)
         pred_obs = np.zeros((N, H, self.ob_dim))
         pred_obs[:, 0] = np.tile(obs[None, :], (N, 1))
+        pred_obs = torch.tensor(pred_obs,dtype=torch.float)
         rewards = np.zeros((N, H))
         for t in range(H):
+            ob  = pred_obs[:, t]
+            ac = candidate_action_sequences[:, t]
+            # rewards[:,t],_ = self.env.compute_reward(self, actions)
             rewards[:, t], _ = self.env.get_reward(
                 pred_obs[:, t], candidate_action_sequences[:, t])
             if t < H - 1:

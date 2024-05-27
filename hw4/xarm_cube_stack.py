@@ -220,7 +220,7 @@ class xarmCubeStack(VecTask):
             self.device_id, self.graphics_device_id, self.physics_engine, self.sim_params)
         self._create_ground_plane()
         self._create_envs(self.num_envs, self.cfg["env"]['envSpacing'], int(np.sqrt(self.num_envs)))
-
+        
     def _create_ground_plane(self):
         plane_params = gymapi.PlaneParams()
         plane_params.normal = gymapi.Vec3(0.0, 0.0, 1.0)
@@ -716,7 +716,13 @@ class xarmCubeStack(VecTask):
         self.gym.set_dof_position_target_tensor(self.sim, gymtorch.unwrap_tensor(self._pos_control))
         self.gym.set_dof_actuation_force_tensor(self.sim, gymtorch.unwrap_tensor(self._effort_control))
 
+    def get_reward(self, states, actions):
+        
+        reset_buf = torch.zeros(states.shape[0])
+        progress_buf = torch.zeros(states.shape[0])
 
+        rewards, _ = compute_franka_reward(reset_buf, progress_buf, actions, states, self.reward_settings, self.max_episode_length)
+        return rewards, None
 
     def post_physics_step(self):
         self.progress_buf += 1
@@ -851,6 +857,19 @@ class xarmCubeStack(VecTask):
 #####################################################################
 ###=========================jit functions=========================###
 #####################################################################
+@torch.jit.script
+def ge_reward(
+        reset_buf, progress_buf, actions, states, reward_settings, max_episode_length
+):
+    reward = torch.where(
+        stack_reward,
+        reward_settings["r_stack_scale"] * stack_reward,
+        reward_settings["r_dist_scale"] * dist_reward + reward_settings["r_lift_scale"] * lift_reward + reward_settings[
+            "r_align_scale"] * align_reward,
+    )
+
+    reset_buf = torch.where((progress_buf >= max_episode_length - 1)|stack_reward>0, torch.ones_like(reset_buf),
+                            reset_buf)
 
 
 @torch.jit.script
