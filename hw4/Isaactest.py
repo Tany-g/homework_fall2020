@@ -6,7 +6,8 @@ from isaacgymenvs.utils.utils import set_seed
 from xarm_cube_stack import xarmCubeStack
 import torch
 # 加载环境配置
-config_path = '/home/tany/PROJECT/IsaacGymEnvs/isaacgymenvs/cfg/task/xarmCubeStacktest.yaml'
+# config_path = '/home/tany/PROJECT/IsaacGymEnvs/isaacgymenvs/cfg/task/xarmCubeStacktest.yaml'
+config_path = '/home/tany/PROJECT/homework_fall2020/hw4/xarmCubeStacktest.yaml'
 with open(config_path, 'r') as file:
     cfg = yaml.safe_load(file)
 def preprocess_train_config(cfg, config_dict):
@@ -60,16 +61,25 @@ env = xarmCubeStack(cfg, rl_device, sim_device, graphics_device_id, headless, vi
                     force_render=False)
 
 # 运行仿真循环
-num_steps = 1000000
+from isaacgym import gymapi
+num_steps = 300
+gym = gymapi.acquire_gym()
+# viewer = gym.create_viewer(env.sim, gymapi.CameraProperties())
+# if viewer is None:
+#     raise ValueError("Failed to create viewer")
 for _ in range(num_steps):
     # 生成随机动作
 
+    # a=gym.simulate(env.sim)
+    # results=gym.fetch_results(env.sim, True)
+    # print(results)
+    # Step graphics
+    gym.step_graphics(env.sim)
+    gym.draw_viewer(env.viewer, env.sim, True)
     actions = torch.rand((env.num_envs, cfg["env"]["numActions"]), device=rl_device)
-    # 执行动作并渲染环境
+    print(actions)
+    # # 执行动作并渲染环境
 
-    env.step(actions)
+    # env.step(actions)
 
-    env.render()
-
-# 关闭环境
-env.close()
+    # env.render()

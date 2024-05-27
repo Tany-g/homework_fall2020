@@ -220,7 +220,7 @@ class xarmCubeStack(VecTask):
             self.device_id, self.graphics_device_id, self.physics_engine, self.sim_params)
         self._create_ground_plane()
         self._create_envs(self.num_envs, self.cfg["env"]['envSpacing'], int(np.sqrt(self.num_envs)))
-
+        
     def _create_ground_plane(self):
         plane_params = gymapi.PlaneParams()
         plane_params.normal = gymapi.Vec3(0.0, 0.0, 1.0)
@@ -716,7 +716,13 @@ class xarmCubeStack(VecTask):
         self.gym.set_dof_position_target_tensor(self.sim, gymtorch.unwrap_tensor(self._pos_control))
         self.gym.set_dof_actuation_force_tensor(self.sim, gymtorch.unwrap_tensor(self._effort_control))
 
-
+    def get_reward(self, obs, actions):
+        
+        reset_buf = torch.zeros(obs.shape[0]).to("cuda:0")
+        progress_buf = torch.zeros(obs.shape[0]).to("cuda:0")
+        
+        rewards, reset_buf = ge_reward(reset_buf, progress_buf, actions, obs.to("cuda:0"), self.states, self.reward_settings, self.max_episode_length)
+        return rewards, None
 
     def post_physics_step(self):
         self.progress_buf += 1
@@ -851,7 +857,61 @@ class xarmCubeStack(VecTask):
 #####################################################################
 ###=========================jit functions=========================###
 #####################################################################
+@torch.jit.script
+def ge_reward(
+        reset_buf, progress_buf, actions, obs, states, reward_settings, max_episode_length
+):
+    # type: (Tensor, Tensor, Tensor, Tensor, Dict[str, Tensor],Dict[str, float], float) -> Tuple[Tensor, Tensor]
+    target_height = states["cubeB_size"][0] + states["cubeA_size"][0] / 2.0
+    cubeA_size = states["cubeA_size"][0]
+    cubeB_size = states["cubeB_size"][0]
+    # distance from hand to the cubeA
+    # d = torch.norm(states["cubeA_pos_relative"], dim=-1)
 
+    # d_lf = torch.norm(states["cubeA_pos"] - states["eef_lf_pos"], dim=-1)
+    # d_rf = torch.norm(states["cubeA_pos"] - states["eef_rf_pos"], dim=-1)
+    # dist_reward = 1 - torch.tanh(10.0 * (d + d_lf + d_rf) / 3)
+    d = torch.norm(obs[:,4:7]-obs[:,10:13],dim=-1)
+    dist_reward = 1 - torch.tanh(10.0 * d)
+    # reward for lifting cubeA
+    cubeA_height = obs[:,7] - reward_settings["table_height"]
+    cubeA_lifted = (cubeA_height - cubeA_size) > 0.03
+    lift_reward = cubeA_lifted
+
+    # how closely aligned cubeA is to cubeB (only provided if cubeA is lifted)
+    offset = torch.zeros_like(obs[:,7:10])
+    offset[:, 2] = (cubeA_size + cubeB_size) / 2
+    d_ab = torch.norm(obs[:,7:10] + offset, dim=-1)
+    align_reward = (1 - torch.tanh(10.0 * d_ab)) * cubeA_lifted
+
+    # Dist reward is maximum of dist and align reward
+    dist_reward = torch.max(dist_reward, align_reward)
+
+    # final reward for stacking successfully (only if cubeA is close to target height and corresponding location, and gripper is not grasping)
+    cubeA_align_cubeB = (torch.norm(obs[:, 7:9], dim=-1) < 0.015)
+    cubeA_on_cubeB = torch.abs(cubeA_height - target_height) < 0.015
+    gripper_away_from_cubeA = (d > 0.05)
+
+    # f_dis = torch.norm(states["eef_rf_pos"] - states["eef_lf_pos"], dim=-1)>0.05
+    f_dis = torch.norm(obs[:,4:7]-obs[:,10:13],dim=-1)>0.05
+    # print(cubeA_align_cubeB.shape)
+    # print(cubeA_on_cubeB.shape)
+    # print(gripper_away_from_cubeA.shape)
+    stack_reward = cubeA_align_cubeB & cubeA_on_cubeB & gripper_away_from_cubeA
+    # Compose rewards
+
+    # We either provide the stack reward or the align + dist reward
+    rewards = torch.where(
+        stack_reward,
+        reward_settings["r_stack_scale"] * stack_reward,
+        reward_settings["r_dist_scale"] * dist_reward + reward_settings["r_lift_scale"] * lift_reward + reward_settings[
+            "r_align_scale"] * align_reward,
+    )
+
+    # Compute resets
+    reset_buf = torch.where((progress_buf >= max_episode_length - 1)|stack_reward>0, torch.ones_like(reset_buf),
+                            reset_buf)
+    return rewards,reset_buf
 
 @torch.jit.script
 def compute_franka_reward(
