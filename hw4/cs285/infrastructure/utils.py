@@ -48,11 +48,10 @@ def perform_actions(env, actions):
         obs.append(ob)
         acs.append(ac)
         ac = torch.tensor(ac,dtype=torch.float)
-        ac = torch.stack((ac,ac),0)
+        # ac = torch.stack((ac,ac),0)
+        ac = ac.expand(32,7)
         ob, rew, done, _ = env.step(ac)
-
-        gym.step_graphics(env.sim)
-        gym.draw_viewer(env.viewer, env.sim, True)
+        env.render()
         # add the observation after taking a step to next_obs
         ob = ob["obs"][0].to("cpu").detach().numpy()
         next_obs.append(ob)
@@ -106,11 +105,12 @@ def sample_trajectory(
         ac = ac[0]
         acs.append(ac)
         
-        ac1 = torch.tensor(ac, dtype=torch.float)
-        ac  = torch.stack((ac1,ac1),0)
+        ac = torch.tensor(ac, dtype=torch.float)
+        ac = ac.expand(32, 7)
         # gym.step_graphics(env.sim)
         # gym.draw_viewer(env.viewer, env.sim, True)
         ob, rew, done, _ = env.step(ac)
+        env.render()
         ob = ob["obs"][0].to("cpu").detach().numpy()
         print(ob,rew,done)
         # add the observation after taking a step to next_obs
