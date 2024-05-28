@@ -91,15 +91,6 @@ class xarmCubeStack(VecTask):
             DH_params = None
             self.rc = RobotContorller(self.arm, DH_params, filter_size=5, filter_type=None)
             time.sleep(1)
-        # try:
-        #     self.arm = XArmAPI("192.168.1.206",is_radian=True)
-        #     self.arm.motion_enable(enable=True)
-        #
-        #     self.arm.reset(wait=True)
-        #
-        #     self.arm.set_mode(1)
-        #     self.arm.set_state(0)
-        #     time.sleep(1)
         except Exception as e:
             print(e)
             print("连接失败")
@@ -145,7 +136,7 @@ class xarmCubeStack(VecTask):
 
         # dimensions
         # obs include: cubeA_pose (7) + cubeB_pos (3) + eef_pose (7) + q_gripper (2)
-        self.cfg["env"]["numObservations"] = 19 if self.control_type == "osc" else 26
+        self.cfg["env"]["numObservations"] = 25 if self.control_type == "osc" else 26
         # actions include: delta EEF if OSC (6) or joint torques (7) + bool gripper (1)
         self.cfg["env"]["numActions"] = 7 if self.control_type == "osc" else 8
 
@@ -506,6 +497,7 @@ class xarmCubeStack(VecTask):
         self._refresh()
         obs = ["cubeA_quat", "cubeA_pos", "cubeA_to_cubeB_pos", "eef_pos", "eef_quat"]
         obs += ["q_gripper"] if self.control_type == "osc" else ["q"]
+        obs +=["eef_lf_pos","eef_rf_pos"]
         self.obs_buf = torch.cat([self.states[ob] for ob in obs], dim=-1)
 
         maxs = {ob: torch.max(self.states[ob]).item() for ob in obs}
@@ -867,12 +859,13 @@ def ge_reward(
     cubeB_size = states["cubeB_size"][0]
     # distance from hand to the cubeA
     # d = torch.norm(states["cubeA_pos_relative"], dim=-1)
-
-    # d_lf = torch.norm(states["cubeA_pos"] - states["eef_lf_pos"], dim=-1)
-    # d_rf = torch.norm(states["cubeA_pos"] - states["eef_rf_pos"], dim=-1)
-    # dist_reward = 1 - torch.tanh(10.0 * (d + d_lf + d_rf) / 3)
     d = torch.norm(obs[:,4:7]-obs[:,10:13],dim=-1)
-    dist_reward = 1 - torch.tanh(10.0 * d)
+
+    d_lf = torch.norm(obs[:,4:7] - obs[:,22:25], dim=-1)
+    d_rf = torch.norm(obs[:,4:7] - obs[:,19:22], dim=-1)
+    dist_reward = 1 - torch.tanh(10.0 * (d + d_lf + d_rf) / 3)
+    # d = torch.norm(obs[:,4:7]-obs[:,10:13],dim=-1)
+    # dist_reward = 1 - torch.tanh(10.0 * d)
     # reward for lifting cubeA
     cubeA_height = obs[:,7] - reward_settings["table_height"]
     cubeA_lifted = (cubeA_height - cubeA_size) > 0.03
